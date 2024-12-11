@@ -1,0 +1,25 @@
+on:
+  push: 
+    branches:
+      - 'kong-ee-demo'
+    paths:
+      - 'kong-ee-portal/workspaces/**'
+
+jobs:
+  deploy_devportal:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, 'kong-ee-demo') }}
+    name: Portal Deploy
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Setup node
+      uses: actions/setup-node@v2.2.0
+      with:
+        node-version: "12"
+    - name: Install Portal CLI
+      run: npm install -g kong-portal-cli
+    - name: Deploy Dev Portal
+      working-directory: ./kong-ee-portal
+      run: |
+        portal -P -D deploy default

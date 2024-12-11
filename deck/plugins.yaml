@@ -1,0 +1,24 @@
+_format_version: "1.0"
+add-plugins:
+- selectors: 
+  - $..services[*]
+  overwrite: true
+  plugins: 
+  - name: rate-limiting-advanced
+    enabled: true
+    config:
+      limit:
+      - 20
+      window_size:
+      - 30
+      identifier: ip
+      dictionary_name: kong_rate_limiting_counters
+      sync_rate: -1
+      namespace: random_auto_generated_string
+      strategy: redis
+      hide_client_headers: false
+      window_type: sliding
+      retry_after_jitter_max: 0
+      redis:
+        host: redis
+        port: 6379
