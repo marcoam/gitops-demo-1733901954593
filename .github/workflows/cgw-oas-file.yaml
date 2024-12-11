@@ -1,0 +1,43 @@
+on:
+  push:
+    branches:
+      - 'cloud-gateways'
+    paths:
+      - 'blog-app/blog**'
+jobs:
+  deploy_to_clouds:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, 'cloud-gateways') }}
+    name: Deploying Kong Configuration
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Setup node
+      uses: actions/setup-node@v2.2.0
+      with:
+        node-version: "12"
+    - name: Install DecK
+      run: |
+        curl -sL https://github.com/kong/deck/releases/download/v1.39.2/deck_1.39.2_linux_amd64.tar.gz -o deck.tar.gz
+        tar -xf deck.tar.gz -C /tmp
+        cp /tmp/deck /usr/local/bin/
+    - name: Generate new gateway configuration
+      run: deck file openapi2kong --spec ./blog-app/blog.yaml --output-file kong.yaml
+    - name: Patch blog host with mocking server
+      run: deck file patch -s kong.yaml -o kong.yaml ./deck/patch/cgw_blog_patch.yaml
+    - name: Add Kong plugins
+      run: |
+        deck file add-plugins -s kong.yaml -o kong.yaml --config "$KONG_OIDC_CONF" --selector "$.services[*]"
+        deck file add-plugins -s kong.yaml -o kong.yaml ./deck/plugins/*
+      env:
+        KONG_OIDC_CONF: ${{ secrets.KONG_OIDC_PLUGIN }}
+    - name: Backup existing configuration
+      run: deck gateway dump --konnect-token $KONNECT_TOKEN --konnect-runtime-group-name $CP_NAME --select-tag gitops -o kong-backup.yaml --tls-skip-verify
+      env:
+       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+       CP_NAME: ${{ secrets.CP_NAME }}
+    - name: Apply new configuration
+      run: deck gateway sync --konnect-token $KONNECT_TOKEN --konnect-runtime-group-name $CP_NAME --select-tag gitops --parallelism 1 --tls-skip-verify kong.yaml
+      env:
+        KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+        CP_NAME: ${{ secrets.CP_NAME }}

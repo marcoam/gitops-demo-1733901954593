@@ -1,0 +1,9 @@
+_format_version: "1.0"
+patches:
+- selectors: 
+  - $.services[*]
+  overwrite: true
+  values:
+    protocol: https
+    host: mock_6c4a9a305d954ef496a371080d097f0d.mock.insomnia.rest
+    port: 443
