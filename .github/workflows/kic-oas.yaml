@@ -1,0 +1,45 @@
+on:
+  push:
+    branches:
+      - 'kic-demo'
+    paths:
+      - 'blog-app/spec**'
+      
+jobs:
+  deploy_to_clouds:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, 'kic-demo') }}
+    name: Configure KIC
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Setup node
+      uses: actions/setup-node@v2.2.0
+      with:
+        node-version: "12"
+    - name: Install Insomnia
+      run: |
+        curl -sL https://github.com/Kong/insomnia/releases/download/lib%403.6.0/inso-linux-3.6.0.tar.xz -o inso.tar.xz
+        sudo tar -xf inso.tar.xz -C /tmp/
+        cp /tmp/inso /usr/local/bin/
+    - name: Substitute secrets
+      uses: bluwy/substitute-string-action@v1
+      id: blog-yaml
+      with:
+        _input-file: ./blog-app/spec.yaml
+        OIDC_CLIENT_ID: ${{ secrets.OIDC_CLIENT_ID }}
+        OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
+    - name: Output OAS to file
+      run: echo "${{ steps.blog-yaml.outputs.result }}" > blog-new.yaml
+    - name: Generate Dev Gateway Configuration
+      run: inso generate config blog-new.yaml --type kubernetes -o kong.yaml --ci
+    - name: Apply configuration to Dev
+      uses: ameydev/gke-kubectl-action@master
+      env:
+        SHA: ${{ steps.short-sha.outputs.sha }}
+        APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
+        ZONE_NAME: ${{ secrets.ZONE_NAME }}
+        PROJECT_ID: ${{ secrets.PROJECT_ID }}
+      with:
+        args: apply -f kong.yaml -n se-kong-mesh
