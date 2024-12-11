@@ -1,0 +1,76 @@
+on:
+  push: 
+    branches:
+      - 'master'
+    paths:
+      - 'se-konnect-portal/**'
+      
+permissions:
+  contents: 'read'
+  id-token: 'write'
+  
+jobs:
+  deploy_devportal:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, 'initial commit') }}
+    name: Deploying Kong Configuration
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup node
+      uses: actions/setup-node@v2.2.0
+      with:
+        node-version: "18.17.1"
+        
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v1.0.0'
+      with:
+        workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.SE_OPERATIONS_SERVICE_ACCOUNT }}
+
+    - name: Install Helm
+      run: |
+        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        chmod 700 get_helm.sh
+        ./get_helm.sh
+        
+    - id: get-gke-credentials
+      uses: google-github-actions/get-gke-credentials@v1.0.0
+      with:
+        cluster_name: ${{ secrets.CLUSTER_NAME }}
+        location: ${{ secrets.ZONE_NAME }}
+        
+    - name: Install Dependencies
+      working-directory: ./se-konnect-portal
+      run: |
+        echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_AUTH_TOKEN }}" > .npmrc
+        yarn
+        
+    - name: Build Devportal
+      working-directory: ./se-konnect-portal
+      run: |
+        yarn build
+        
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.KONG_DOCKERHUB_PUSH_USER }}
+        password: ${{ secrets.KONG_DOCKERHUB_PUSH_TOKEN }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build and Push Devportal
+      uses: docker/build-push-action@v3
+      with:
+        context: ./se-konnect-portal
+        file: ./se-konnect-portal/Dockerfile
+        push: true
+        tags: kong/sales-engineering:se-konnect-portal-${{ github.sha }}
+   
+    - name: Upgrade SE Konnect Portal
+      working-directory: ./deploy
+      run: |
+        helm upgrade -i se-konnect-portal se-konnect-portal -n se-konnect-portal --set image.tag=se-konnect-portal-${{ github.sha }}
