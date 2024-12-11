@@ -1,0 +1,58 @@
+openapi: 3.0.0
+info:
+  version: '2.2'
+  title: Blog
+  license:
+    name: Apache 2.0
+  description: 'Blog Service API'
+  contact:
+    name: Kong
+servers:
+  - url: 'http://blog-service.se-kong-mesh.svc:3000'
+paths:
+  '/blogs':
+    post:
+      operationId: addBlog
+      summary: Add a blog
+      description: This API adds a blog
+      responses:
+        '200':
+          description: Blog
+      tags:
+      - blog
+    get:
+      operationId: getBlogs
+      summary: Get blogs
+      description: This API gets all blogs
+      responses:
+        '200':
+          description: Blog
+      tags:
+      - blog
+  '/blogs/{id}':
+    get:
+      operationId: getBlogById
+      summary: Get a blog by id
+      description: This API gets a blog by ID
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "description": "ID of blog to use",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "style": "simple"
+        }
+      ]
+      responses: 
+        '200':
+          description: Blog
+      tags:
+      - blog
+tags:
+- name: blog
